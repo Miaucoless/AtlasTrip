@@ -57,27 +57,37 @@ Install the following before running the app:
 
 ## Project Structure
 
+All application code lives in two top-level directories:
+
+| Directory | Description | Entry point |
+|-----------|-------------|-------------|
+| [`mobile/`](mobile/) | React Native (Expo) mobile app | `mobile/App.js` |
+| [`backend/`](backend/) | Node.js / Express REST API | `backend/server.js` |
+
 ```
 AtlasTrip/
-├── mobile/          # React Native (Expo) app
-│   ├── App.js
-│   ├── babel.config.js
+├── mobile/                  # React Native (Expo) app
+│   ├── App.js               # App entry point
 │   ├── package.json
 │   └── src/
 │       ├── screens/         # HomeScreen, TripsScreen, DiscoverScreen, MapScreen, ProfileScreen
-│       ├── components/      # Globe, GlassmorphicCard
+│       ├── components/      # Globe (3D Earth), GlassmorphicCard
 │       ├── navigation/      # AppNavigator (Bottom Tabs)
-│       ├── services/        # api.js, auth.js
+│       ├── services/        # api.js (HTTP client), auth.js (authentication)
 │       ├── hooks/           # useAuth.js
-│       └── utils/           # constants.js
-└── backend/         # Node.js / Express API
-    ├── server.js
-    ├── config/      # db.js
-    ├── models/      # User, Trip, Destination
-    ├── routes/      # auth, trips, destinations, ai
-    ├── middleware/  # auth, error
-    └── .env.example
+│       └── utils/           # constants.js (design tokens & mock data)
+├── backend/                 # Node.js / Express API
+│   ├── server.js            # Server entry point
+│   ├── config/              # db.js (MongoDB connection)
+│   ├── models/              # User, Trip, Destination schemas
+│   ├── routes/              # auth, trips, destinations, ai endpoints
+│   ├── middleware/           # auth (JWT), error handler
+│   └── .env.example
+├── ARCHITECTURE.md          # Detailed code map — where every feature lives
+└── atlastrip_app_design.md  # Original design specification
 ```
+
+> 📖 **Looking for a specific feature?** See [`ARCHITECTURE.md`](ARCHITECTURE.md) for a detailed map of every file and which feature it implements.
 
 ---
 
