@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import GlassmorphicCard from '../components/Common/GlassmorphicCard';
+import WeatherWidget from '../components/Map/WeatherWidget';
 import { COLORS, SPACING, BORDER_RADIUS } from '../utils/constants';
 
 const { width, height } = Dimensions.get('window');
@@ -101,6 +103,31 @@ export default function MapScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [searchText, setSearchText] = useState('');
+  const [userLocation, setUserLocation] = useState(null);
+  const [showWeather, setShowWeather] = useState(false);
+
+  // Map region state
+  const [mapRegion, setMapRegion] = useState({
+    latitude: 35.6892,
+    longitude: 139.6921,
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  });
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        setUserLocation({ lat: loc.coords.latitude, lon: loc.coords.longitude });
+        setMapRegion((prev) => ({
+          ...prev,
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        }));
+      }
+    })();
+  }, []);
 
   const visibleMarkers = MAP_MARKERS.filter(m =>
     activeFilter === 'all' || m.type === activeFilter
@@ -112,12 +139,8 @@ export default function MapScreen() {
       <MapView
         style={styles.map}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : null}
-        initialRegion={{
-          latitude: 35.6892,
-          longitude: 139.6921,
-          latitudeDelta: 0.08,
-          longitudeDelta: 0.08,
-        }}
+        region={mapRegion}
+        onRegionChangeComplete={setMapRegion}
         customMapStyle={MAP_STYLE}
         showsUserLocation
         showsCompass={false}
@@ -142,11 +165,21 @@ export default function MapScreen() {
           <View style={styles.searchInner}>
             <Ionicons name="search-outline" size={18} color={COLORS.textSecondary} />
             <Text style={styles.searchPlaceholder}>Search places on map...</Text>
-            <TouchableOpacity style={styles.filterIconBtn}>
-              <Ionicons name="options-outline" size={18} color={COLORS.gold} />
+            <TouchableOpacity
+              style={styles.filterIconBtn}
+              onPress={() => setShowWeather((v) => !v)}
+            >
+              <Ionicons name={showWeather ? 'partly-sunny' : 'partly-sunny-outline'} size={18} color={showWeather ? COLORS.gold : COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </GlassmorphicCard>
+
+        {/* Weather widget */}
+        {showWeather && userLocation && (
+          <View style={{ marginTop: SPACING.sm }}>
+            <WeatherWidget lat={userLocation.lat} lon={userLocation.lon} />
+          </View>
+        )}
       </View>
 
       {/* Filter Pills */}

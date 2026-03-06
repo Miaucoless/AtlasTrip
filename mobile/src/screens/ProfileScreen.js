@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,51 +9,25 @@ import {
   FlatList,
   ImageBackground,
   Dimensions,
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GlassmorphicCard from '../components/Common/GlassmorphicCard';
+import AnimatedFlightPaths, { FlightStatsPanel } from '../components/Map/AnimatedFlightPaths';
+import { useAuth } from '../hooks/useAuth';
+import { getTravelHistory, getFlightHistory, getTrips } from '../services/api';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../utils/constants';
 
 const { width } = Dimensions.get('window');
 
-const USER_PROFILE = {
-  name: 'Alex Johnson',
-  handle: '@alexexplores',
-  bio: 'Passionate traveler · 47 countries · Coffee lover ☕',
-  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-  banner: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800',
-  stats: {
-    trips: 24,
-    countries: 47,
-    miles: '128K',
-    cities: 89,
-  },
-};
-
-const SAVED_TRIPS = [
-  { id: '1', name: 'Tokyo 2025', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=300', emoji: '🇯🇵' },
-  { id: '2', name: 'Santorini', image: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=300', emoji: '🇬🇷' },
-  { id: '3', name: 'Bali Retreat', image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=300', emoji: '🇮🇩' },
-];
-
-const FAVORITES = [
-  { id: '1', name: 'Paris', country: 'France', emoji: '🇫🇷', image: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=200' },
-  { id: '2', name: 'Tokyo', country: 'Japan', emoji: '🇯🇵', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=200' },
-  { id: '3', name: 'New York', country: 'USA', emoji: '🇺🇸', image: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=200' },
-  { id: '4', name: 'Bali', country: 'Indonesia', emoji: '🇮🇩', image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=200' },
-];
-
-const TRAVEL_HISTORY = [
-  { continent: 'Europe', countries: ['France', 'Italy', 'Greece', 'Spain', 'Germany', 'Portugal', 'UK'], emoji: '🌍' },
-  { continent: 'Asia', countries: ['Japan', 'Thailand', 'Indonesia', 'Singapore', 'India', 'UAE'], emoji: '🌏' },
-  { continent: 'Americas', countries: ['USA', 'Canada', 'Mexico', 'Brazil', 'Peru', 'Argentina'], emoji: '🌎' },
-  { continent: 'Oceania', countries: ['Australia', 'New Zealand', 'Fiji'], emoji: '🗺' },
-];
-
 const SETTINGS_ITEMS = [
-  { id: 'notifications', icon: 'notifications-outline', label: 'Notifications', badge: '3' },
+  { id: 'notifications', icon: 'notifications-outline', label: 'Notifications' },
   { id: 'privacy', icon: 'shield-outline', label: 'Privacy & Security' },
   { id: 'currency', icon: 'cash-outline', label: 'Currency & Units', value: 'USD' },
   { id: 'language', icon: 'language-outline', label: 'Language', value: 'English' },
@@ -75,16 +49,20 @@ function StatCard({ value, label, icon }) {
 }
 
 function SavedTripCard({ trip }) {
+  const imageUrl = trip.cover_image_url || trip.image ||
+    'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=300';
+  const name = trip.title || trip.name;
+
   return (
-    <TouchableOpacity style={styles.savedCard} activeOpacity={0.85}>
+    <TouchableOpacity style={[styles.savedCard, { marginRight: 12 }]} activeOpacity={0.85}>
       <ImageBackground
-        source={{ uri: trip.image }}
+        source={{ uri: imageUrl }}
         style={styles.savedCardImage}
         imageStyle={{ borderRadius: BORDER_RADIUS.md }}
       >
         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.savedGradient}>
-          <Text style={styles.savedEmoji}>{trip.emoji}</Text>
-          <Text style={styles.savedName}>{trip.name}</Text>
+          <Text style={styles.savedName}>{name}</Text>
+          {trip.destination && <Text style={styles.savedDest}>{trip.destination}</Text>}
         </LinearGradient>
       </ImageBackground>
     </TouchableOpacity>
@@ -133,24 +111,101 @@ function SettingsRow({ item }) {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { user, profile, logout, updateProfile, uploadAvatar } = useAuth();
   const [editMode, setEditMode] = useState(false);
+  const [trips, setTrips] = useState([]);
+  const [flightData, setFlightData] = useState({ flights: [], stats: {} });
+  const [travelStats, setTravelStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [tripsRes, flightRes, historyRes] = await Promise.allSettled([
+        getTrips(),
+        getFlightHistory(),
+        getTravelHistory(),
+      ]);
+
+      if (tripsRes.status === 'fulfilled') setTrips(tripsRes.value.data.trips || []);
+      if (flightRes.status === 'fulfilled') setFlightData(flightRes.value.data);
+      if (historyRes.status === 'fulfilled') setTravelStats(historyRes.value.data.stats);
+    } catch {
+      // Gracefully handle errors
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, [fetchData]);
+
+  const handleEditSave = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({ full_name: editName, bio: editBio });
+      setEditMode(false);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
+    ]);
+  };
+
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Explorer';
+  const displayBio = profile?.bio || 'Passionate traveler exploring the world ✈️';
+  const avatar = profile?.avatar_url;
+  const banner = 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800';
+
+  const completedTrips = trips.filter((t) => t.status === 'completed');
+  const stats = {
+    trips: trips.length,
+    countries: travelStats?.countriesVisited || flightData.stats?.countriesVisited || 0,
+    cities: travelStats?.citiesVisited || 0,
+    miles: travelStats?.totalMilesFlown || flightData.stats?.totalMiles || 0,
+  };
 
   return (
     <View style={styles.container}>
       <LinearGradient colors={[COLORS.navyDark, COLORS.navy, COLORS.navyMid]} style={StyleSheet.absoluteFillObject} />
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.gold} colors={[COLORS.gold]} />
+        }
+      >
         {/* Banner & Avatar */}
         <View style={styles.bannerSection}>
           <ImageBackground
-            source={{ uri: USER_PROFILE.banner }}
+            source={{ uri: banner }}
             style={[styles.banner, { paddingTop: insets.top }]}
           >
             <LinearGradient
               colors={['rgba(0,0,0,0.3)', 'rgba(10,14,26,0.9)']}
               style={styles.bannerGradient}
             >
-              <TouchableOpacity style={styles.editBtn} onPress={() => setEditMode(!editMode)}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => {
+                setEditName(displayName);
+                setEditBio(displayBio);
+                setEditMode(true);
+              }}>
                 <Ionicons name="pencil-outline" size={16} color={COLORS.textPrimary} />
                 <Text style={styles.editText}>Edit Profile</Text>
               </TouchableOpacity>
@@ -159,76 +214,86 @@ export default function ProfileScreen() {
 
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrap}>
-              <Image source={{ uri: USER_PROFILE.avatar }} style={styles.avatar} />
+              {avatar ? (
+                <Image source={{ uri: avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarPlaceholderText}>{displayName[0].toUpperCase()}</Text>
+                </View>
+              )}
               <View style={styles.avatarBadge}>
                 <Ionicons name="checkmark" size={10} color={COLORS.navyDark} />
               </View>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{USER_PROFILE.name}</Text>
-              <Text style={styles.profileHandle}>{USER_PROFILE.handle}</Text>
-              <Text style={styles.profileBio} numberOfLines={2}>{USER_PROFILE.bio}</Text>
+              <Text style={styles.profileName}>{displayName}</Text>
+              {profile?.username && <Text style={styles.profileHandle}>@{profile.username}</Text>}
+              <Text style={styles.profileBio} numberOfLines={2}>{displayBio}</Text>
             </View>
           </View>
         </View>
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          <StatCard value={USER_PROFILE.stats.trips} label="Trips" icon="airplane-outline" />
-          <StatCard value={USER_PROFILE.stats.countries} label="Countries" icon="globe-outline" />
-          <StatCard value={USER_PROFILE.stats.cities} label="Cities" icon="business-outline" />
-          <StatCard value={USER_PROFILE.stats.miles} label="Miles" icon="navigate-outline" />
+          <StatCard value={stats.trips} label="Trips" icon="airplane-outline" />
+          <StatCard value={stats.countries} label="Countries" icon="globe-outline" />
+          <StatCard value={stats.cities} label="Cities" icon="business-outline" />
+          <StatCard value={stats.miles >= 1000 ? `${(stats.miles / 1000).toFixed(0)}K` : stats.miles} label="Miles" icon="navigate-outline" />
         </View>
 
-        {/* Saved Trips */}
+        {/* Flight Map */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📌 Saved Trips</Text>
-            <TouchableOpacity><Text style={styles.seeAll}>See All</Text></TouchableOpacity>
+            <Text style={styles.sectionTitle}>✈️ Travel Map</Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-            {SAVED_TRIPS.map((trip) => (
-              <View key={trip.id} style={{ marginRight: 12 }}>
-                <SavedTripCard trip={trip} />
-              </View>
-            ))}
-          </ScrollView>
+          <View style={{ paddingHorizontal: SPACING.md }}>
+            <AnimatedFlightPaths flights={flightData.flights || []} height={160} />
+          </View>
+          {flightData.stats && (
+            <View style={{ paddingHorizontal: SPACING.md, marginTop: SPACING.sm }}>
+              <FlightStatsPanel stats={flightData.stats} />
+            </View>
+          )}
         </View>
 
-        {/* Favorites */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>❤️ Favorites</Text>
+        {/* Recent Trips */}
+        {trips.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>📌 My Trips</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+              {trips.slice(0, 6).map((trip) => (
+                <SavedTripCard key={trip.id} trip={trip} />
+              ))}
+            </ScrollView>
           </View>
-          <View style={styles.favGrid}>
-            {FAVORITES.map((item) => (
-              <FavoriteItem key={item.id} item={item} />
-            ))}
-          </View>
-        </View>
+        )}
 
-        {/* Travel History */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🗺 Travel History</Text>
-          </View>
-          <View style={styles.historyContainer}>
-            {TRAVEL_HISTORY.map((region) => (
-              <GlassmorphicCard key={region.continent} style={styles.historyCard}>
-                <View style={styles.historyCardContent}>
-                  <Text style={styles.historyEmoji}>{region.emoji}</Text>
-                  <View style={styles.historyInfo}>
-                    <Text style={styles.historyCont}>{region.continent}</Text>
-                    <Text style={styles.historyCount}>{region.countries.length} countries visited</Text>
-                    <Text style={styles.historyCountries} numberOfLines={1}>
-                      {region.countries.join(' · ')}
-                    </Text>
+        {/* Completed Trips History */}
+        {completedTrips.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🗺 Travel History</Text>
+            </View>
+            <View style={styles.historyContainer}>
+              {completedTrips.map((trip) => (
+                <GlassmorphicCard key={trip.id} style={styles.historyCard}>
+                  <View style={styles.historyCardContent}>
+                    <Text style={styles.historyEmoji}>✅</Text>
+                    <View style={styles.historyInfo}>
+                      <Text style={styles.historyCont}>{trip.title}</Text>
+                      <Text style={styles.historyCount}>{trip.destination}</Text>
+                      {trip.start_date && (
+                        <Text style={styles.historyCountries}>{trip.start_date} → {trip.end_date}</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </GlassmorphicCard>
-            ))}
+                </GlassmorphicCard>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Settings */}
         <View style={styles.section}>
@@ -247,7 +312,7 @@ export default function ProfileScreen() {
 
         {/* Sign Out */}
         <View style={[styles.section, { paddingHorizontal: SPACING.md }]}>
-          <TouchableOpacity style={styles.signOutBtn} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.signOutBtn} activeOpacity={0.8} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
@@ -259,6 +324,45 @@ export default function ProfileScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal visible={editMode} transparent animationType="slide" onRequestClose={() => setEditMode(false)}>
+        <View style={styles.editModalOverlay}>
+          <GlassmorphicCard style={styles.editModal}>
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setEditMode(false)}>
+                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Display Name</Text>
+              <View style={styles.inputWrap}>
+                <TextInput style={styles.input} value={editName} onChangeText={setEditName} placeholder="Your name" placeholderTextColor={COLORS.textMuted} />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Bio</Text>
+              <View style={[styles.inputWrap, { height: 80, alignItems: 'flex-start', paddingTop: SPACING.sm }]}>
+                <TextInput style={[styles.input, { height: 60 }]} value={editBio} onChangeText={setEditBio} placeholder="Tell us about yourself..." placeholderTextColor={COLORS.textMuted} multiline />
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.createBtn} onPress={handleEditSave} disabled={saving}>
+              <LinearGradient colors={[COLORS.gold, COLORS.goldDark]} style={styles.createBtnGradient}>
+                {saving ? <ActivityIndicator size="small" color={COLORS.navyDark} /> : (
+                  <>
+                    <Ionicons name="checkmark" size={20} color={COLORS.navyDark} />
+                    <Text style={styles.createBtnText}>Save Changes</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </GlassmorphicCard>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -319,6 +423,7 @@ const styles = StyleSheet.create({
   savedGradient: { flex: 1, borderRadius: BORDER_RADIUS.md, justifyContent: 'flex-end', padding: 8 },
   savedEmoji: { fontSize: 18 },
   savedName: { fontSize: 12, fontWeight: '600', color: COLORS.textPrimary },
+  savedDest: { fontSize: 10, color: COLORS.textSecondary },
 
   favGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 10,
@@ -371,4 +476,35 @@ const styles = StyleSheet.create({
 
   versionInfo: { alignItems: 'center', paddingBottom: SPACING.md },
   versionText: { fontSize: 12, color: COLORS.textMuted },
+
+  avatarPlaceholder: {
+    backgroundColor: COLORS.navyLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholderText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.gold,
+  },
+
+  editModalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end',
+  },
+  editModal: {
+    margin: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: SPACING.lg, paddingBottom: 40,
+  },
+  editModalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg,
+  },
+  editModalTitle: { fontSize: 20, fontWeight: '700', color: COLORS.textPrimary },
+
+  inputGroup: { marginBottom: SPACING.md },
+  inputLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.navyLight, borderRadius: BORDER_RADIUS.md, borderWidth: 1, borderColor: COLORS.glassBorder, paddingHorizontal: SPACING.md },
+  input: { flex: 1, fontSize: 14, color: COLORS.textPrimary, paddingVertical: SPACING.sm },
+
+  createBtn: { borderRadius: BORDER_RADIUS.md, overflow: 'hidden', marginTop: SPACING.sm },
+  createBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15 },
+  createBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.navyDark },
 });

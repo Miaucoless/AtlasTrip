@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,31 +9,36 @@ import {
   FlatList,
   ImageBackground,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GlassmorphicCard from '../components/Common/GlassmorphicCard';
+import AIChatbot from '../components/AI/AIChatbot';
+import { getTrendingDestinations, getHiddenGems, searchDestinations } from '../services/api';
 import { COLORS, SPACING, BORDER_RADIUS, CATEGORIES } from '../utils/constants';
 
 const { width } = Dimensions.get('window');
 const GRID_ITEM = (width - SPACING.md * 2 - 12) / 2;
 
-const ALL_DESTINATIONS = [
-  { id: '1', name: 'Santorini', country: 'Greece', image: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=400', rating: 4.9, category: 'beaches', emoji: '🇬🇷' },
-  { id: '2', name: 'Tokyo', country: 'Japan', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400', rating: 4.8, category: 'cities', emoji: '🇯🇵' },
-  { id: '3', name: 'Bali', country: 'Indonesia', image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400', rating: 4.7, category: 'beaches', emoji: '🇮🇩' },
-  { id: '4', name: 'Paris', country: 'France', image: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400', rating: 4.8, category: 'cities', emoji: '🇫🇷' },
-  { id: '5', name: 'Machu Picchu', country: 'Peru', image: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?w=400', rating: 4.9, category: 'mountains', emoji: '🇵🇪' },
-  { id: '6', name: 'Kyoto', country: 'Japan', image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400', rating: 4.8, category: 'culture', emoji: '🇯🇵' },
-  { id: '7', name: 'Patagonia', country: 'Argentina', image: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400', rating: 4.9, category: 'adventure', emoji: '🇦🇷' },
-  { id: '8', name: 'Amalfi Coast', country: 'Italy', image: 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=400', rating: 4.8, category: 'beaches', emoji: '🇮🇹' },
+// Fallback data when API is unavailable
+const FALLBACK_DESTINATIONS = [
+  { id: '1', name: 'Santorini', country: 'Greece', image_url: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=400', rating: 4.9, category: 'beaches', emoji: '🇬🇷' },
+  { id: '2', name: 'Tokyo', country: 'Japan', image_url: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400', rating: 4.8, category: 'cities', emoji: '🇯🇵' },
+  { id: '3', name: 'Bali', country: 'Indonesia', image_url: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400', rating: 4.7, category: 'beaches', emoji: '🇮🇩' },
+  { id: '4', name: 'Paris', country: 'France', image_url: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400', rating: 4.8, category: 'cities', emoji: '🇫🇷' },
+  { id: '5', name: 'Machu Picchu', country: 'Peru', image_url: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?w=400', rating: 4.9, category: 'mountains' },
+  { id: '6', name: 'Kyoto', country: 'Japan', image_url: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400', rating: 4.8, category: 'culture', emoji: '🇯🇵' },
+  { id: '7', name: 'Patagonia', country: 'Argentina', image_url: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400', rating: 4.9, category: 'adventure' },
+  { id: '8', name: 'Amalfi Coast', country: 'Italy', image_url: 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=400', rating: 4.8, category: 'beaches' },
 ];
 
-const HIDDEN_GEMS = [
-  { id: 'g1', name: 'Faroe Islands', country: 'Denmark', image: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400', description: 'Dramatic cliffs, puffins & Viking history' },
-  { id: 'g2', name: 'Kotor', country: 'Montenegro', image: 'https://images.unsplash.com/photo-1581974944026-5d6ed762f617?w=400', description: 'Medieval walled city on Adriatic' },
-  { id: 'g3', name: 'Luang Prabang', country: 'Laos', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400', description: 'UNESCO temples & Buddhist culture' },
+const FALLBACK_GEMS = [
+  { id: 'g1', name: 'Faroe Islands', country: 'Denmark', image_url: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400', description: 'Dramatic cliffs, puffins & Viking history' },
+  { id: 'g2', name: 'Kotor', country: 'Montenegro', image_url: 'https://images.unsplash.com/photo-1581974944026-5d6ed762f617?w=400', description: 'Medieval walled city on Adriatic' },
+  { id: 'g3', name: 'Luang Prabang', country: 'Laos', image_url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400', description: 'UNESCO temples & Buddhist culture' },
 ];
 
 const RESTAURANTS = [
@@ -56,15 +61,16 @@ const CITY_PULSE = [
 ];
 
 function DestinationGridItem({ item }) {
+  const imageUrl = item.image_url || item.image || 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400';
   return (
     <TouchableOpacity style={[styles.gridItem, { width: GRID_ITEM }]} activeOpacity={0.85}>
       <ImageBackground
-        source={{ uri: item.image }}
+        source={{ uri: imageUrl }}
         style={styles.gridItemImage}
         imageStyle={{ borderRadius: BORDER_RADIUS.md }}
       >
         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.gridGradient}>
-          <Text style={styles.gridItemEmoji}>{item.emoji}</Text>
+          {item.emoji && <Text style={styles.gridItemEmoji}>{item.emoji}</Text>}
           <Text style={styles.gridItemName}>{item.name}</Text>
           <Text style={styles.gridItemCountry}>{item.country}</Text>
           <View style={styles.gridRating}>
@@ -78,10 +84,11 @@ function DestinationGridItem({ item }) {
 }
 
 function HiddenGemCard({ item }) {
+  const imageUrl = item.image_url || item.image || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400';
   return (
     <TouchableOpacity style={styles.gemCard} activeOpacity={0.85}>
       <ImageBackground
-        source={{ uri: item.image }}
+        source={{ uri: imageUrl }}
         style={styles.gemCardImage}
         imageStyle={{ borderRadius: BORDER_RADIUS.md }}
       >
@@ -125,21 +132,85 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
+  const [destinations, setDestinations] = useState(FALLBACK_DESTINATIONS);
+  const [hiddenGems, setHiddenGems] = useState(FALLBACK_GEMS);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
-  const filteredDests = ALL_DESTINATIONS.filter(d =>
+  const fetchData = useCallback(async () => {
+    try {
+      const [trendRes, gemsRes] = await Promise.allSettled([
+        getTrendingDestinations(),
+        getHiddenGems(),
+      ]);
+      if (trendRes.status === 'fulfilled' && trendRes.value.data.destinations?.length) {
+        setDestinations(trendRes.value.data.destinations);
+      }
+      if (gemsRes.status === 'fulfilled' && gemsRes.value.data.destinations?.length) {
+        setHiddenGems(gemsRes.value.data.destinations);
+      }
+    } catch {
+      // Use fallback data
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSearch = useCallback(async (text) => {
+    setSearchText(text);
+    if (text.length >= 2) {
+      try {
+        const res = await searchDestinations(text, activeCategory === 'all' ? null : activeCategory);
+        if (res.data.destinations?.length) {
+          setDestinations(res.data.destinations);
+        }
+      } catch {
+        // Keep current data
+      }
+    } else if (text.length === 0) {
+      fetchData();
+    }
+  }, [activeCategory, fetchData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, [fetchData]);
+
+  const filteredDests = destinations.filter(d =>
     (activeCategory === 'all' || d.category === activeCategory) &&
-    (searchText === '' || d.name.toLowerCase().includes(searchText.toLowerCase()))
+    (searchText === '' || d.name?.toLowerCase().includes(searchText.toLowerCase()))
   );
 
   return (
     <View style={styles.container}>
       <LinearGradient colors={[COLORS.navyDark, COLORS.navy, COLORS.navyMid]} style={StyleSheet.absoluteFillObject} />
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.gold} colors={[COLORS.gold]} />
+        }
+      >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-          <Text style={styles.screenTitle}>Discover 🌏</Text>
-          <Text style={styles.screenSubtitle}>Find your next adventure</Text>
+          <View>
+            <Text style={styles.screenTitle}>Discover 🌏</Text>
+            <Text style={styles.screenSubtitle}>Find your next adventure</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.chatBtn}
+            onPress={() => setShowChat(true)}
+          >
+            <LinearGradient colors={[COLORS.gold, COLORS.goldDark]} style={styles.chatBtnGrad}>
+              <Ionicons name="sparkles-outline" size={20} color={COLORS.navyDark} />
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
         {/* Search */}
@@ -152,8 +223,13 @@ export default function DiscoverScreen() {
                 placeholder="Search destinations..."
                 placeholderTextColor={COLORS.textMuted}
                 value={searchText}
-                onChangeText={setSearchText}
+                onChangeText={handleSearch}
               />
+              {searchText.length > 0 && (
+                <TouchableOpacity onPress={() => handleSearch('')}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              )}
             </View>
           </GlassmorphicCard>
         </View>
@@ -188,11 +264,15 @@ export default function DiscoverScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>🗺 Destinations</Text>
           </View>
-          <View style={styles.grid}>
-            {filteredDests.map((item, index) => (
-              <DestinationGridItem key={item.id} item={item} />
-            ))}
-          </View>
+          {loading ? (
+            <ActivityIndicator color={COLORS.gold} style={{ paddingVertical: SPACING.xl }} />
+          ) : (
+            <View style={styles.grid}>
+              {filteredDests.map((item) => (
+                <DestinationGridItem key={item.id} item={item} />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Hidden Gems */}
@@ -202,7 +282,7 @@ export default function DiscoverScreen() {
             <TouchableOpacity><Text style={styles.seeAll}>See All</Text></TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-            {HIDDEN_GEMS.map((item) => (
+            {hiddenGems.map((item) => (
               <View key={item.id} style={{ marginRight: 12 }}>
                 <HiddenGemCard item={item} />
               </View>
@@ -265,6 +345,14 @@ export default function DiscoverScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* AI Chatbot Modal */}
+      {showChat && (
+        <AIChatbot
+          visible={showChat}
+          onClose={() => setShowChat(false)}
+        />
+      )}
     </View>
   );
 }
@@ -272,9 +360,11 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.navyDark },
   scroll: { flex: 1 },
-  header: { paddingHorizontal: SPACING.md, marginBottom: SPACING.md },
+  header: { paddingHorizontal: SPACING.md, marginBottom: SPACING.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   screenTitle: { fontSize: 28, fontWeight: '800', color: COLORS.textPrimary },
   screenSubtitle: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  chatBtn: { borderRadius: BORDER_RADIUS.round, overflow: 'hidden', marginTop: 4 },
+  chatBtnGrad: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 
   searchSection: { paddingHorizontal: SPACING.md, marginBottom: SPACING.md },
   searchCard: {},
