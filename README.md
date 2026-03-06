@@ -14,14 +14,44 @@ A premium React Native travel planning app built with Expo and backed by a Node.
 
 ---
 
+## Opening the Project
+
+### If you see a "Select how to open the repository" dialog (VS Code)
+
+1. Click **"Select Directory…"**
+2. Navigate to the folder where you cloned AtlasTrip (e.g. `~/Projects/AtlasTrip`)
+3. Click **Open**
+
+VS Code will open the project and you're ready for the steps below.
+
+### Haven't cloned yet?
+
+```bash
+git clone https://github.com/Miaucoless/AtlasTrip.git
+cd AtlasTrip
+```
+
+Then open the folder in your editor:
+
+```bash
+# VS Code
+code .
+```
+
+---
+
 ## Prerequisites
 
-- Node.js ≥ 18
-- npm ≥ 9
-- Expo CLI (`npm install -g expo-cli`)
-- MongoDB (local or Atlas)
-- (Optional) OpenAI API key
-- (Optional) OpenWeatherMap API key
+Install the following before running the app:
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Node.js | ≥ 18 | https://nodejs.org |
+| npm | ≥ 9 | bundled with Node.js |
+| Expo Go (phone) | latest | [iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent) |
+| MongoDB | any | https://www.mongodb.com/try/download/community |
+
+> **No physical device?** Install [Android Studio](https://developer.android.com/studio) (Android emulator) or use Xcode on macOS (iOS simulator).
 
 ---
 
@@ -53,19 +83,35 @@ AtlasTrip/
 
 ## Quick Start
 
-### 1. Backend
+You need **two terminal windows** — one for the backend, one for the mobile app.
+
+### Terminal 1 — Backend API
 
 ```bash
 cd backend
-cp .env.example .env
-# Edit .env with your MongoDB URI, JWT secrets, and API keys
+cp .env.example .env        # create your local config file
+```
+
+Open the new `.env` file and set at minimum:
+
+```
+MONGODB_URI=mongodb://localhost:27017/atlastrip
+JWT_SECRET=any-long-random-string
+JWT_REFRESH_SECRET=another-long-random-string
+```
+
+Then install and start:
+
+```bash
 npm install
 npm run dev
 ```
 
-The API will be available at `http://localhost:5000`.
+✅ The API is ready when you see: `Server running on port 5000`
 
-### 2. Mobile App
+---
+
+### Terminal 2 — Mobile App
 
 ```bash
 cd mobile
@@ -73,10 +119,16 @@ npm install
 npx expo start
 ```
 
-Then press:
-- **`i`** – open in iOS Simulator
-- **`a`** – open in Android Emulator
-- **Scan QR** – open in Expo Go on your device
+A QR code appears in the terminal. Choose how to run:
+
+| Option | How |
+|--------|-----|
+| 📱 Physical phone | Scan the QR code with the **Expo Go** app |
+| 🤖 Android emulator | Press **`a`** (requires Android Studio) |
+| 🍎 iOS simulator | Press **`i`** (requires Xcode on macOS) |
+| 🌐 Web browser | Press **`w`** |
+
+> **Tip — phone + local backend:** If running on a physical device, update `mobile/src/utils/constants.js` and change `API_URL` from `http://localhost:5000` to `http://<your-computer-IP>:5000` (find your IP with `ipconfig` on Windows or `ifconfig` on Mac/Linux).
 
 ---
 
