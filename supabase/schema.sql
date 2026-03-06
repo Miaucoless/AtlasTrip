@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS public.trips (
   tags             TEXT[],
   cover_color      TEXT DEFAULT '#1E3A5F',
   is_template      BOOLEAN DEFAULT FALSE,
-  share_token      TEXT UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
+  share_token      TEXT UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );

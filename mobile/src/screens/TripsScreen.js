@@ -283,7 +283,7 @@ function CreateTripModal({ visible, onClose, onCreate }) {
 // Itinerary view with real-time data and all features
 function TripDetailView({ trip, onBack, onRefreshList }) {
   const [activeFeature, setActiveFeature] = useState(null); // 'optimizer' | 'replay' | 'flights' | 'chat'
-  const { itineraryItems, comments, collaborators, loading, refresh, addItem, deleteItem } = useRealtimeTrip(trip.id);
+  const { itineraryItems, comments, collaborators, loading, refresh: refreshTrip, addItem, deleteItem } = useRealtimeTrip(trip.id);
   const [addItemModal, setAddItemModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemType, setNewItemType] = useState('activity');
@@ -326,7 +326,7 @@ function TripDetailView({ trip, onBack, onRefreshList }) {
           <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
           <Text style={styles.backText}>Back to Trip</Text>
         </TouchableOpacity>
-        <AITripOptimizer tripId={trip.id} onApply={() => { setActiveFeature(null); refresh(); }} />
+        <AITripOptimizer tripId={trip.id} onApply={() => { setActiveFeature(null); refreshTrip(); }} />
       </View>
     );
   }
@@ -354,7 +354,7 @@ function TripDetailView({ trip, onBack, onRefreshList }) {
           visible
           onClose={() => setActiveFeature(null)}
           tripId={trip.id}
-          onFlightSaved={refresh}
+          onFlightSaved={refreshTrip}
         />
       </>
     );

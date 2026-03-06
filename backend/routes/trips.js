@@ -14,16 +14,7 @@ router.get('/', async (req, res, next) => {
     const { status, limit = 20, page = 1 } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
 
-    let query = supabase
-      .from('trips')
-      .select('*, trip_collaborators!inner(user_id)')
-      .or(`user_id.eq.${req.user.id},trip_collaborators.user_id.eq.${req.user.id}`)
-      .order('updated_at', { ascending: false })
-      .range(offset, offset + Number(limit) - 1);
-
-    if (status) query = query.eq('status', status);
-
-    // Simpler query: get owned trips + collaborated trips separately
+    // Get owned trips
     let ownedQuery = supabase
       .from('trips')
       .select('*')

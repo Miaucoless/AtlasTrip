@@ -34,6 +34,9 @@ export function useAuth() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null);
       if (session?.user) fetchProfile(session.user.id);
+    }).catch(() => {
+      // Ignore session fetch errors (e.g. when Supabase is not configured)
+    }).finally(() => {
       setLoading(false);
     });
 

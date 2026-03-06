@@ -1,5 +1,21 @@
 const { createClient } = require('@supabase/supabase-js');
 
+// Cache a base Supabase client (no user JWT) to avoid recreating it on every request.
+// We still need to call getUser(token) with the caller's token to verify it.
+let _baseClient = null;
+function getBaseClient() {
+  if (!_baseClient) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseAnonKey) {
+      _baseClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+    }
+  }
+  return _baseClient;
+}
+
 /**
  * Verify a Supabase JWT and attach the user to req.user.
  * The token is the JWT issued by Supabase Auth (access_token).
@@ -13,19 +29,10 @@ async function protect(req, res, next) {
 
     const token = authHeader.split(' ')[1];
 
-    // Create a per-request Supabase client using the caller's JWT so that
-    // Supabase can verify it against the project's JWT secret automatically.
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
+    const client = getBaseClient();
+    if (!client) {
       return res.status(503).json({ success: false, message: 'Auth service not configured' });
     }
-
-    const client = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
 
     const { data: { user }, error } = await client.auth.getUser(token);
 
@@ -41,4 +48,3 @@ async function protect(req, res, next) {
 }
 
 module.exports = { protect };
-

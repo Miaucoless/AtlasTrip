@@ -151,7 +151,7 @@ router.get('/history/map', async (req, res, next) => {
   try {
     const { data: flights, error } = await supabase
       .from('flights')
-      .select('origin_airport, origin_city, origin_lat, origin_lon, dest_airport, dest_city, dest_lat, dest_lon, departure_time, airline, distance_miles')
+      .select('origin_airport, origin_city, origin_lat, origin_lon, dest_airport, dest_city, dest_country, dest_lat, dest_lon, departure_time, airline, distance_miles')
       .eq('user_id', req.user.id)
       .eq('status', 'completed')
       .order('departure_time', { ascending: false });
@@ -159,7 +159,7 @@ router.get('/history/map', async (req, res, next) => {
     if (error) return res.status(500).json({ success: false, message: error.message });
 
     const totalMiles = flights.reduce((sum, f) => sum + (f.distance_miles || 0), 0);
-    const countries = [...new Set(flights.map((f) => f.dest_city?.split(',')[1]?.trim()).filter(Boolean))];
+    const countries = [...new Set(flights.map((f) => f.dest_country || f.dest_city?.split(',')[1]?.trim()).filter(Boolean))];
 
     res.json({
       success: true,

@@ -9,14 +9,20 @@ const ExpoSecureStoreAdapter = {
   removeItem: (key) => SecureStore.deleteItemAsync(key),
 };
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
-  console.warn('⚠️  EXPO_PUBLIC_SUPABASE_URL not set – Supabase features will not work');
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn(
+    '⚠️  EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY not set.\n' +
+    '   Copy mobile/.env.example to mobile/.env and fill in your Supabase credentials.',
+  );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-anon-key',
+  {
   auth: {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,

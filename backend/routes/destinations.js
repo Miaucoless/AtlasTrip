@@ -86,6 +86,41 @@ router.get('/cities', async (req, res, next) => {
   }
 });
 
+// GET /api/destinations/weather/coords?lat=&lon= – weather by coordinates
+// NOTE: Must be defined before /:id to prevent 'weather' being treated as a UUID
+router.get('/weather/coords', protect, async (req, res, next) => {
+  try {
+    const { lat, lon } = req.query;
+    if (!lat || !lon) {
+      return res.status(400).json({ success: false, message: 'lat and lon are required' });
+    }
+
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ success: false, message: 'Weather service not configured' });
+    }
+
+    const { data } = await axios.get(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`,
+    );
+
+    res.json({
+      success: true,
+      weather: {
+        temp: Math.round(data.main.temp),
+        feels_like: Math.round(data.main.feels_like),
+        description: data.weather[0].description,
+        icon: data.weather[0].icon,
+        humidity: data.main.humidity,
+        windSpeed: Math.round(data.wind.speed),
+        city: data.name,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/destinations/:id
 router.get('/:id', async (req, res, next) => {
   try {
@@ -157,39 +192,7 @@ router.get('/:id/weather', protect, async (req, res, next) => {
   }
 });
 
-// GET /api/destinations/weather/coords?lat=&lon= – weather by coordinates
-router.get('/weather/coords', protect, async (req, res, next) => {
-  try {
-    const { lat, lon } = req.query;
-    if (!lat || !lon) {
-      return res.status(400).json({ success: false, message: 'lat and lon are required' });
-    }
-
-    const apiKey = process.env.OPENWEATHER_API_KEY;
-    if (!apiKey) {
-      return res.status(503).json({ success: false, message: 'Weather service not configured' });
-    }
-
-    const { data } = await axios.get(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`,
-    );
-
-    res.json({
-      success: true,
-      weather: {
-        temp: Math.round(data.main.temp),
-        feels_like: Math.round(data.main.feels_like),
-        description: data.weather[0].description,
-        icon: data.weather[0].icon,
-        humidity: data.main.humidity,
-        windSpeed: Math.round(data.wind.speed),
-        city: data.name,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+// (weather/coords route is defined earlier, before /:id)
 
 module.exports = router;
 
