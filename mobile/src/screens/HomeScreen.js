@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import GlobeView from '../components/Globe/GlobeView';
 import GlassmorphicCard from '../components/Common/GlassmorphicCard';
+import { useAuth } from '../hooks/useAuth';
+import { getTrendingDestinations, searchDestinations } from '../services/api';
 import {
   COLORS,
   SPACING,
@@ -46,10 +48,11 @@ const EXPERIENCES = [
 ];
 
 function DestinationCard({ item }) {
+  const imageUrl = item.image || item.image_url || 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400';
   return (
     <TouchableOpacity style={styles.destCard} activeOpacity={0.85}>
       <ImageBackground
-        source={{ uri: item.image }}
+        source={{ uri: imageUrl }}
         style={styles.destCardImage}
         imageStyle={{ borderRadius: BORDER_RADIUS.lg }}
         resizeMode="cover"
@@ -63,9 +66,9 @@ function DestinationCard({ item }) {
               <Ionicons name="star" size={10} color={COLORS.gold} />
               <Text style={styles.destRatingText}>{item.rating}</Text>
             </View>
-            <Text style={styles.destCardName}>{item.emoji} {item.name}</Text>
+            <Text style={styles.destCardName}>{item.emoji ? `${item.emoji} ` : ''}{item.name}</Text>
             <Text style={styles.destCardCountry}>{item.country}</Text>
-            <Text style={styles.destCardPrice}>From ${item.price}</Text>
+            <Text style={styles.destCardPrice}>From ${item.price || 249}</Text>
           </View>
         </LinearGradient>
       </ImageBackground>
@@ -119,12 +122,47 @@ function ExperienceCard({ item }) {
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { user, profile } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [trendingDests, setTrendingDests] = useState(TRENDING_DESTINATIONS);
+
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Explorer';
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good Morning ☀️';
+    if (h < 18) return 'Good Afternoon ✈️';
+    return 'Good Evening 🌙';
+  })();
+
+  useEffect(() => {
+    getTrendingDestinations().then((res) => {
+      if (res.data.destinations?.length) {
+        const mapped = res.data.destinations.map((d) => ({
+          ...d,
+          image: d.image_url,
+          price: 249,
+          emoji: '',
+        }));
+        setTrendingDests(mapped);
+      }
+    }).catch(() => {
+      // Use fallback data
+    });
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
+    getTrendingDestinations().then((res) => {
+      if (res.data.destinations?.length) {
+        const mapped = res.data.destinations.map((d) => ({
+          ...d,
+          image: d.image_url,
+          price: 249,
+        }));
+        setTrendingDests(mapped);
+      }
+    }).catch(() => {}).finally(() => setRefreshing(false));
   }, []);
 
   return (
@@ -153,8 +191,8 @@ export default function HomeScreen({ navigation }) {
           {/* Top Header */}
           <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
             <View>
-              <Text style={styles.greeting}>Good Morning ✈️</Text>
-              <Text style={styles.userName}>Explorer</Text>
+              <Text style={styles.greeting}>{greeting}</Text>
+              <Text style={styles.userName}>{displayName}</Text>
             </View>
             <TouchableOpacity style={styles.notifBtn}>
               <Ionicons name="notifications-outline" size={22} color={COLORS.textPrimary} />
@@ -213,7 +251,7 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           <FlatList
-            data={TRENDING_DESTINATIONS}
+            data={trendingDests}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => <DestinationCard item={item} />}
             horizontal

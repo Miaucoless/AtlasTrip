@@ -171,4 +171,7 @@ export const FLIGHT_DEALS = [
   { id: '3', from: 'LHR', to: 'Bali', price: 620, airline: 'Singapore Air', date: 'Dec 28' },
 ];
 
-export const API_BASE_URL = 'http://localhost:5000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
+export const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '';
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
